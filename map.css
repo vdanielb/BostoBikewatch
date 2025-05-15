@@ -1,6 +1,9 @@
 :root {
   --color-accent: oklch(0.95 0.0134 228.4 / 50%);
   --theme-color: #ed713a;
+  --color-departures: steelblue;
+  --color-balanced: #c573b6;
+  --color-arrivals: darkorange;
 }
 
 html,
@@ -30,6 +33,13 @@ body {
 }
 
 circle {
+  /* Use root color variables for color-mix */
+  --color: color-mix(
+    in oklch,
+    var(--color-departures) calc(100% * var(--departure-ratio)),
+    var(--color-arrivals)
+  );
+  fill: var(--color);
   pointer-events: auto;
 }
 
@@ -38,7 +48,6 @@ circle:hover {
   transform-origin: center;
   transform-box: fill-box;
   transform: scale(1.2);
-  fill: var(--theme-color);
 }
 
 .time-filter-header {
@@ -97,3 +106,40 @@ input[type=range]:focus {
 input[type=range]:focus::-webkit-slider-runnable-track {
   background: #ccc;
 }
+
+.legend {
+  display: flex;
+  align-items: center;
+  gap: 2em;
+  font-family: inherit;
+  margin: 1em 0;
+}
+
+.legend-label {
+  color: #888;
+  font-size: 0.95em;
+  font-variant: small-caps;
+  letter-spacing: 0.05em;
+  margin-right: 1em;
+  font-weight: 600;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 0.4em;
+  font-size: 1em;
+}
+
+.legend-dot {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  display: inline-block;
+  margin-right: 0.3em;
+  background: var(--color-departures); /* default, override below */
+}
+
+.legend-dot.departures { background: var(--color-departures); }
+.legend-dot.balanced   { background: var(--color-balanced); }
+.legend-dot.arrivals   { background: var(--color-arrivals); }

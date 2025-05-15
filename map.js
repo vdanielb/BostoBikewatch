@@ -146,9 +146,8 @@ map.on('load', async () => {
     },
   );
 
-
-  
   stations = computeStationTraffic(jsonData.data.stations);
+  let stationFlow = d3.scaleQuantize().domain([0, 1]).range([0, 0.5, 1]);
 
   const radiusScale = d3
     .scaleSqrt()
@@ -165,6 +164,9 @@ map.on('load', async () => {
     .attr('stroke', 'white') // Circle border color
     .attr('stroke-width', 1) // Circle border thickness
     .attr('opacity', 0.6)
+    .style('--departure-ratio', (d) =>
+      stationFlow(d.departures / d.totalTraffic)
+    )
     .each(function (d) {
     // Add <title> for browser tooltips
     d3.select(this)
@@ -224,7 +226,10 @@ map.on('load', async () => {
     circles
       .data(filteredStations, (d) => d.short_name) // Ensure D3 tracks elements correctly
       .join('circle') // Ensure the data is bound correctly
-      .attr('r', (d) => radiusScale(d.totalTraffic)); // Update circle sizes
+      .attr('r', (d) => radiusScale(d.totalTraffic)) // Update circle sizes
+      .style('--departure-ratio', (d) =>
+        stationFlow(d.departures / d.totalTraffic),
+      );
   }
 
   slider.addEventListener('input', updateTimeDisplay);
