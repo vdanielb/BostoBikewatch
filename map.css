@@ -1,3 +1,8 @@
+:root {
+  --color-accent: oklch(0.95 0.0134 228.4 / 50%);
+  --theme-color: #ed713a;
+}
+
 html,
 body {
   margin: 0;
@@ -14,4 +19,23 @@ body {
   height: 100%; /* Adjust height to your desired size */
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1); /* Optional: subtle shadow for effect */
   border-radius: 8px; /* Optional: rounded corners */
+}
+
+#map svg {
+  position: absolute;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  pointer-events: auto;
+}
+
+circle {
+  transition: 200ms;
+  transform-origin: center;
+  transform-box: fill-box;
+}
+
+circle:hover {
+  transform: scale(1.2);
+  fill: var(--theme-color);
 }
