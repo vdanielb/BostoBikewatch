@@ -3,7 +3,8 @@ console.log('Mapbox GL JS Loaded:', mapboxgl);
 import * as d3 from 'https://cdn.jsdelivr.net/npm/d3@7.9.0/+esm';
 
 mapboxgl.accessToken = 'pk.eyJ1IjoidmJ1ZGlkaGFybWEiLCJhIjoiY21hb3kxcmhjMGI5ZTJqcThuazlraHl4eCJ9.WLiRURJw-aChYNG-x3XKGw';
-
+let departuresByMinute = Array.from({ length: 1440 }, () => []);
+let arrivalsByMinute = Array.from({ length: 1440 }, () => []);
 // Initialize the map
 const map = new mapboxgl.Map({
   container: 'map', // ID of the div where the map will render
@@ -22,6 +23,69 @@ function getCoords(station) {
   const point = new mapboxgl.LngLat(+station.lon, +station.lat); // Convert lon/lat to Mapbox LngLat
   const { x, y } = map.project(point); // Project to pixel coordinates
   return { cx: x, cy: y }; // Return as object for use in SVG attributes
+}
+
+function minutesSinceMidnight(date) {
+  return date.getHours() * 60 + date.getMinutes();
+}
+
+function filterTripsbyTime(trips, timeFilter) {
+  return timeFilter === -1
+    ? trips // If no filter is applied (-1), return all trips
+    : trips.filter((trip) => {
+        // Convert trip start and end times to minutes since midnight
+        const startedMinutes = minutesSinceMidnight(trip.started_at);
+        const endedMinutes = minutesSinceMidnight(trip.ended_at);
+
+        // Include trips that started or ended within 60 minutes of the selected time
+        return (
+          Math.abs(startedMinutes - timeFilter) <= 60 ||
+          Math.abs(endedMinutes - timeFilter) <= 60
+        );
+      });
+}
+
+function filterByMinute(tripsByMinute, minute) {
+  if (minute === -1) {
+    return tripsByMinute.flat(); // No filtering, return all trips
+  }
+
+  // Normalize both min and max minutes to the valid range [0, 1439]
+  let minMinute = (minute - 60 + 1440) % 1440;
+  let maxMinute = (minute + 60) % 1440;
+
+  // Handle time filtering across midnight
+  if (minMinute > maxMinute) {
+    let beforeMidnight = tripsByMinute.slice(minMinute);
+    let afterMidnight = tripsByMinute.slice(0, maxMinute);
+    return beforeMidnight.concat(afterMidnight).flat();
+  } else {
+    return tripsByMinute.slice(minMinute, maxMinute).flat();
+  }
+}
+
+function computeStationTraffic(stations, timeFilter = -1) {
+  // Retrieve filtered trips efficiently
+  const departures = d3.rollup(
+    filterByMinute(departuresByMinute, timeFilter), // Efficient retrieval
+    (v) => v.length,
+    (d) => d.start_station_id
+  );
+
+  const arrivals = d3.rollup(
+    filterByMinute(arrivalsByMinute, timeFilter), // Efficient retrieval
+    (v) => v.length,
+    (d) => d.end_station_id
+  );
+
+  stations = stations.map((station) => {
+    let id = station.short_name;
+    station.arrivals = arrivals.get(id) ?? 0;
+    station.departures = departures.get(id) ?? 0;
+    station.totalTraffic = station.arrivals + station.departures;
+    return station;
+  });
+  return stations;
 }
 
 map.on('load', async () => {
@@ -67,25 +131,24 @@ map.on('load', async () => {
     console.error('Error loading JSON:', error); // Handle errors
   }
 
-  const trips = await d3.csv('https://dsc106.com/labs/lab07/data/bluebikes-traffic-2024-03.csv')
-  const departures = d3.rollup(
-    trips,
-    (v) => v.length,
-    (d) => d.start_station_id,
-  );
-  const arrivals = d3.rollup(
-    trips,
-    (v) => v.length,
-    (d) => d.end_station_id,
+  let trips = await d3.csv(
+    'https://dsc106.com/labs/lab07/data/bluebikes-traffic-2024-03.csv',
+    (trip) => {
+      trip.started_at = new Date(trip.started_at);
+      trip.ended_at = new Date(trip.ended_at);
+      let startedMinutes = minutesSinceMidnight(trip.started_at);
+      //This function returns how many minutes have passed since `00:00` (midnight).
+      departuresByMinute[startedMinutes].push(trip);
+      //This adds the trip to the correct index in `departuresByMinute` so that later we can efficiently retrieve all trips that started at a specific time.
+      let endedMinutes = minutesSinceMidnight(trip.ended_at);
+      arrivalsByMinute[endedMinutes].push(trip);
+      return trip;
+    },
   );
 
-  stations = stations.map((station) => {
-    let id = station.short_name;
-    station.arrivals = arrivals.get(id) ?? 0;
-    station.departures = departures.get(id) ?? 0;
-    station.totalTraffic = station.arrivals + station.departures;
-    return station;
-  });
+
+  
+  stations = computeStationTraffic(jsonData.data.stations);
 
   const radiusScale = d3
     .scaleSqrt()
@@ -94,7 +157,7 @@ map.on('load', async () => {
 
   const circles = svg
     .selectAll('circle')
-    .data(stations)
+    .data(stations, (d) => d.short_name) // Use station short_name as the key
     .enter()
     .append('circle')
     .attr('r', d => radiusScale(d.totalTraffic)) // Radius of the circle
@@ -139,15 +202,29 @@ map.on('load', async () => {
   }
 
   function updateTimeDisplay() {
-    const val = parseInt(slider.value, 10);
-    if (val === -1) {
-      timeDisplay.style.display = 'none';
-      anyTime.style.display = 'block';
+    let timeFilter = Number(slider.value); // Get slider value
+  
+    if (timeFilter === -1) {
+      timeDisplay.textContent = ''; // Clear time display
+      anyTime.style.display = 'block'; // Show "(any time)"
     } else {
-      timeDisplay.textContent = formatTime(val);
-      timeDisplay.style.display = 'block';
-      anyTime.style.display = 'none';
+      timeDisplay.textContent = formatTime(timeFilter); // Display formatted time
+      anyTime.style.display = 'none'; // Hide "(any time)"
     }
+  
+    // Call updateScatterPlot to reflect the changes on the map
+    updateScatterPlot(timeFilter);
+  }
+
+  function updateScatterPlot(timeFilter) {
+    timeFilter === -1 ? radiusScale.range([0, 25]) : radiusScale.range([3, 50]);
+    const filteredStations = computeStationTraffic(stations, timeFilter);
+
+    // Update the scatterplot by adjusting the radius of circles
+    circles
+      .data(filteredStations, (d) => d.short_name) // Ensure D3 tracks elements correctly
+      .join('circle') // Ensure the data is bound correctly
+      .attr('r', (d) => radiusScale(d.totalTraffic)); // Update circle sizes
   }
 
   slider.addEventListener('input', updateTimeDisplay);
