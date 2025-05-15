@@ -14,6 +14,9 @@ const map = new mapboxgl.Map({
   maxZoom: 18, // Maximum allowed zoom
 });
 
+// Add navigation controls
+map.addControl(new mapboxgl.NavigationControl(), 'top-right');
+
 const svg = d3.select('#map').select('svg');
 function getCoords(station) {
   const point = new mapboxgl.LngLat(+station.lon, +station.lat); // Convert lon/lat to Mapbox LngLat
@@ -121,5 +124,33 @@ map.on('load', async () => {
   map.on('zoom', updatePositions); // Update during zooming
   map.on('resize', updatePositions); // Update on window resize
   map.on('moveend', updatePositions); // Final adjustment after movement ends
+
+  // Time slider logic
+  const slider = document.getElementById('time-slider');
+  const timeDisplay = document.getElementById('selected-time');
+  const anyTime = document.getElementById('any-time');
+
+  function formatTime(minutes) {
+    const h = Math.floor(minutes / 60);
+    const m = minutes % 60;
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    const hour12 = h % 12 === 0 ? 12 : h % 12;
+    return `${hour12}:${m.toString().padStart(2, '0')} ${ampm}`;
+  }
+
+  function updateTimeDisplay() {
+    const val = parseInt(slider.value, 10);
+    if (val === -1) {
+      timeDisplay.style.display = 'none';
+      anyTime.style.display = 'block';
+    } else {
+      timeDisplay.textContent = formatTime(val);
+      timeDisplay.style.display = 'block';
+      anyTime.style.display = 'none';
+    }
+  }
+
+  slider.addEventListener('input', updateTimeDisplay);
+  updateTimeDisplay();
 });
 

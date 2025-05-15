@@ -16,6 +16,14 @@
   </head>
   <body>
     <h1>🚴🏼‍♀️ Boston Bikewatch 🏙️</h1>
+    <header class="time-filter-header">
+      <label>
+        Filter by time:
+        <input type="range" id="time-slider" min="-1" max="1440" value="-1">
+        <time id="selected-time" style="display: block;"></time>
+        <em id="any-time" style="display: block; color: #888; font-style: italic;">(any time)</em>
+      </label>
+    </header>
     <div id="map">
       <svg></svg>
     </div>
